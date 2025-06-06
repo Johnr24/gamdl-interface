@@ -14,9 +14,24 @@ WORKDIR /app
 # - git is needed to clone Bento4
 # - curl is a general utility
 # - xz-utils is needed to decompress ffmpeg static builds
+# - Common build dependencies for Pillow (a gamdl dependency)
+# - libyaml-dev for PyYAML (a dependency of pywidevine, which gamdl uses)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git curl xz-utils && \
-    apt-get clean && \
+    apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        xz-utils \
+        libjpeg62-turbo-dev \
+        zlib1g-dev \
+        libtiff5-dev \
+        liblcms2-dev \
+        libwebp-dev \
+        libfreetype6-dev \
+        libharfbuzz-dev \
+        libfribidi-dev \
+        libxcb1-dev \
+        libyaml-dev \
+    && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Download and install FFmpeg static build for the target architecture from John Van Sickle
