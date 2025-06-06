@@ -113,7 +113,7 @@ def handle_start_download(data_dict):
         gamdl_command_args = [
             '--cookies-path', GAMDL_COOKIES_PATH,
             '--output-path', GAMDL_OUTPUT_PATH,
-            # '--mp4decrypt-path', '/usr/local/bin/mp4decrypt', # Removed as Bento4 is not installed
+            '--mp4decrypt-path', '/usr/local/bin/mp4decrypt', # Path for Bento4 built from source
             apple_music_url
         ]
         

@@ -12,11 +12,27 @@ WORKDIR /app
 
 # Install system dependencies
 # - ffmpeg is required by gamdl
-# - git can be useful for some pip installs
-# - unzip is needed to extract Bento4
-# - curl or wget is needed to download Bento4 (curl is often preferred)
+# - git is needed to clone Bento4
+# - curl is a general utility
 RUN apt-get update && \
-    apt-get install -y ffmpeg git unzip curl && \
+    apt-get install -y --no-install-recommends ffmpeg git curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Bento4 (for mp4decrypt) by compiling from source
+ENV BENTO4_VERSION v1.6.0-641 # Using a recent stable tag for Bento4
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends cmake build-essential python3-dev && \
+    git clone --depth 1 --branch ${BENTO4_VERSION} https://github.com/axiomatic-systems/Bento4.git /tmp/Bento4 && \
+    cd /tmp/Bento4 && \
+    cmake -B build -S . -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build --config Release --parallel $(nproc) && \
+    cp build/mp4decrypt /usr/local/bin/ && \
+    cp build/mp4info /usr/local/bin/ && \
+    chmod +x /usr/local/bin/mp4decrypt /usr/local/bin/mp4info && \
+    cd / && \
+    rm -rf /tmp/Bento4 && \
+    apt-get purge -y --auto-remove cmake build-essential python3-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
