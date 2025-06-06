@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  gamdl-webui:
+    build: . # Assumes a Dockerfile is in the current directory
+    container_name: gamdl_webui
+    ports:
+      - "2025:5000"
+    # Environment variables for paths are now hardcoded in app.py for Docker.
+    # .env file in the project root can still be used for Docker Compose variable substitution
+    # (e.g., for port numbers in this file), but not for GAMDL_COOKIES_PATH/GAMDL_OUTPUT_PATH in the app.
+    environment:
+      PYTHONUNBUFFERED: 1 # Ensures Python logs are sent straight to terminal in Docker
+    volumes:
+      # Mount a host directory containing 'cookies.txt' to /app/config in the container.
+      # User should create './config/cookies.txt' on the host.
+      - ./config:/app/config
+      # Mount a host directory for music downloads to /app/music in the container.
+      # User should create './music' on the host.
+      - /mnt/SSDPool/Media/Music:/app/music
+      # For development, you might want to mount your application code:
+      # - .:/app 
+    restart: unless-stopped

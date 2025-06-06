@@ -1,0 +1,7 @@
+Flask>=2.0 # Or your specific Flask version
+Flask-SocketIO>=5.0 # Or your specific Flask-SocketIO version
+pexpect>=4.0 # Or your specific pexpect version
+gunicorn>=20.0 # For production WSGI server
+# gamdl itself should be installed in the Docker image, not listed here
+# unless you intend to install it via pip from PyPI within the same environment.
+# For now, assuming gamdl is installed separately in the Docker image.

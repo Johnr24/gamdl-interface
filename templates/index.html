@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gamdl Web UI</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f4f4; color: #333; } /* Increased margin */
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 800px; margin-left: auto; margin-right: auto; }
+        h1 { color: #333; text-align: center; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="url"], input[type="text"] { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 5px; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        #output-area { 
+            margin-top: 20px; 
+            padding: 15px; 
+            background-color: #2b2b2b; /* Darker background for terminal look */
+            color: #f0f0f0; /* Lighter text */
+            border: 1px solid #444; 
+            border-radius: 4px; 
+            min-height: 200px; 
+            max-height: 60vh; /* Use viewport height for max height */
+            overflow-y: auto; 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            font-family: 'Menlo', 'Consolas', 'Courier New', Courier, monospace; /* Better monospaced font stack */
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        .terminal-input-container { margin-top: 10px; display: flex; gap: 10px; }
+        .terminal-input-container input[type="text"] { flex-grow: 1; margin-bottom: 0; }
+        .error-message { color: #ff6b6b; font-weight: bold; } /* Brighter Red for errors */
+        .info-message { color: #4ecdc4; } /* Teal/Cyan for info */
+        .sent-input-message { color: #90ee90; } /* Light green for sent input */
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>gamdl Interactive Web UI</h1>
+        <form id="downloadForm"> <!-- Removed method="POST" -->
+            <label for="urlInput">Apple Music URL:</label>
+            <input type="url" id="urlInput" name="url" required placeholder="https://music.apple.com/...">
+            <button type="submit" id="startDownloadButton" style="display: block; width: 100%;">Start Download</button>
+        </form>
+
+        <h2 style="margin-top: 30px;">Live Output / Interaction</h2>
+        <div id="terminal-container" style="height: 60vh; width: 100%; background-color: #1e1e1e;"></div>
+        <div class="terminal-instructions" style="margin-top: 15px; padding: 10px; background-color: #e9ecef; border-radius: 4px; font-size: 0.9em;">
+            <p style="margin: 0;"><strong>Terminal Instructions:</strong></p>
+            <ul style="margin-top: 5px; margin-bottom: 0; padding-left: 20px;">
+                <li>Use <strong>Arrow Keys</strong> (Up/Down) to navigate options.</li>
+                <li>Press <strong>Spacebar</strong> to select/deselect an item.</li>
+                <li>Press <strong>Enter</strong> to confirm your selection(s) and proceed.</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const socket = io({ autoConnect: false }); 
+
+            const downloadForm = document.getElementById('downloadForm');
+            const urlInput = document.getElementById('urlInput');
+            const startDownloadButton = document.getElementById('startDownloadButton');
+            const terminalContainer = document.getElementById('terminal-container');
+
+            // Initialize Xterm.js
+            const term = new Terminal({
+                cursorBlink: true,
+                convertEol: true, // Convert \n to \r\n for proper line endings in the pseudo-terminal
+                fontFamily: 'Menlo, Consolas, "Courier New", Courier, monospace',
+                // You can set rows/cols here, or use FitAddon
+                // rows: 24, 
+                // cols: 80,
+            });
+            const fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(terminalContainer);
+            fitAddon.fit(); // Fit terminal to container size
+            window.addEventListener('resize', () => fitAddon.fit());
+
+
+            function addSystemMessageToTerminal(message, type = '') {
+                // For system messages (connect, disconnect, errors from UI itself)
+                // We can color them or prefix them to distinguish from gamdl output
+                let prefix = '';
+                if (type === 'error') prefix = '\x1b[31m[UI ERROR]\x1b[0m '; // Red
+                else if (type === 'info') prefix = '\x1b[32m[UI INFO]\x1b[0m '; // Green
+                term.writeln(prefix + message); // Use writeln for system messages to ensure they are on new lines
+            }
+            
+            // --- Socket.IO Event Handlers ---
+            socket.on('connect', function() {
+                console.log('Connected to server via WebSocket.');
+                term.clear(); // Clear terminal on new connection
+                addSystemMessageToTerminal('Connected to server. Ready to start downloads.', 'info');
+                startDownloadButton.disabled = false;
+                term.focus(); // Focus the terminal for input
+            });
+
+            socket.on('disconnect', function(reason) {
+                console.log('Disconnected from server:', reason);
+                addSystemMessageToTerminal('Disconnected from server: ' + reason + '. Please refresh or check server.', 'error');
+                startDownloadButton.disabled = true;
+            });
+            
+            socket.on('connect_error', (err) => {
+                console.error('Connection attempt failed:', err);
+                addSystemMessageToTerminal(`Failed to connect to server: ${err.message}. Is the server running? Retrying...`, 'error');
+                startDownloadButton.disabled = true;
+            });
+
+            socket.on('gamdl_output', function (msg) {
+                // msg.data contains raw output from gamdl, including ANSI escape codes
+                term.write(msg.data); 
+            });
+
+            socket.on('error_message', function (msg) {
+                // Server-side errors related to gamdl process or app logic
+                addSystemMessageToTerminal('[SERVER ERROR] ' + msg.error, 'error');
+            });
+
+            socket.on('info_message', function (msg) {
+                // Server-side info messages
+                addSystemMessageToTerminal('[SERVER INFO] ' + msg.message, 'info');
+            });
+            
+            socket.on('download_complete', function (msg) {
+                addSystemMessageToTerminal('--- ' + msg.message + ' ---', 'info');
+                // startDownloadButton.disabled = false; // Or manage based on server logic
+            });
+
+            // --- Xterm.js Input Handling ---
+            term.onData(data => {
+                // 'data' is what the user types, including special keys like Enter (\r), arrow keys (escape sequences)
+                socket.emit('send_input', { input: data });
+                // Optional: Echo input to the terminal if pexpect echo is off (which it is)
+                // term.write(data); // Be careful with this, as gamdl might also echo. Test behavior.
+            });
+
+            // --- UI Event Handlers ---
+            downloadForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                const appleMusicUrl = urlInput.value.trim();
+                if (appleMusicUrl) {
+                    // term.clear(); // Optionally clear terminal for new download
+                    addSystemMessageToTerminal('Starting download for: ' + appleMusicUrl, 'info');
+                    socket.emit('start_download', { url: appleMusicUrl });
+                } else {
+                    addSystemMessageToTerminal('Please enter an Apple Music URL.', 'error');
+                }
+            });
+
+            // --- Initial connection & UI state ---
+            startDownloadButton.disabled = true; 
+            addSystemMessageToTerminal('Awaiting connection to server...', 'info');
+            socket.connect(); // Manually connect
+
+        });
+    </script>
+</body>
+</html>

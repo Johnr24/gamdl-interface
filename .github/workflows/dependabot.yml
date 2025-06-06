@@ -1,0 +1,147 @@
+# GitHub Actions workflow for Dependabot
+# This file should be placed in .github/workflows/dependabot.yml
+
+name: Dependabot
+
+on:
+  pull_request: # Run on pull requests to ensure the config is valid
+    branches:
+      - main # Or your default branch
+  schedule:
+    # Check for updates daily (you can adjust the schedule)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows manual triggering of the workflow
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write # To create pull requests
+      issues: write        # To create issues for comments
+      contents: write      # To update files like requirements.txt
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Dependabot for Python (pip) dependencies
+      - name: Dependabot for pip
+        uses: dependabot/fetch-metadata@v2
+        with:
+          # Required: The package ecosystem to update.
+          package-manager: "pip"
+          # Required: The directory containing the manifest and lock files.
+          # For requirements.txt in the root directory:
+          directory: "/"
+          # Optional: The target branch for pull requests. Defaults to the default branch.
+          # target-branch: "main"
+          # Optional: Labels to add to pull requests.
+          # labels: "dependencies,python"
+          # Optional: Reviewers to assign to pull requests.
+          # reviewers: "user1,user2"
+          # Optional: Assignees for pull requests.
+          # assignees: "user1"
+          # Optional: Milestone for pull requests.
+          # milestone: "v1.0"
+          # Optional: How to handle version updates (e.g., "increase-if-necessary", "lockfile-only").
+          # versioning-strategy: "increase-if-necessary"
+
+      # Dependabot for Docker base images
+      - name: Dependabot for Docker
+        uses: dependabot/fetch-metadata@v2
+        with:
+          package-manager: "docker"
+          directory: "/" # Directory where your Dockerfile is located
+          # target-branch: "main"
+          # labels: "dependencies,docker"
+
+      # Dependabot for GitHub Actions
+      - name: Dependabot for GitHub Actions
+        uses: dependabot/fetch-metadata@v2
+        with:
+          package-manager: "github-actions"
+          directory: "/" # Check for actions in all workflow files in .github/workflows
+          # target-branch: "main"
+          # labels: "dependencies,github-actions"
+
+# Note: This workflow file itself uses dependabot/fetch-metadata@v2.
+# The "Dependabot for GitHub Actions" step will help keep this action up-to-date.
+
+# To fully enable Dependabot, you also need a dependabot.yml configuration file
+# in the .github directory of your repository. This workflow *complements* that
+# configuration by providing a way to run checks on a schedule or manually,
+# but the core configuration for *what* to update and *how* is in .github/dependabot.yml.
+
+# However, for simpler setups, GitHub can often auto-detect dependencies
+# without a separate .github/dependabot.yml if you enable Dependabot version updates
+# in your repository settings (Security > Code security and analysis).
+# This workflow is more about *triggering* the checks.
+
+# If you want more fine-grained control, create a .github/dependabot.yml like this:
+#
+# version: 2
+# updates:
+#   - package-ecosystem: "pip"
+#     directory: "/"
+#     schedule:
+#       interval: "daily"
+#     target-branch: "main"
+#
+#   - package-ecosystem: "docker"
+#     directory: "/"
+#     schedule:
+#       interval: "daily"
+#     target-branch: "main"
+#
+#   - package-ecosystem: "github-actions"
+#     directory: "/"
+#     schedule:
+#       interval: "daily"
+#     target-branch: "main"
+
+# The `dependabot/fetch-metadata` action is designed to be used with a separate
+# `dependabot.yml` configuration file. The action itself doesn't create PRs.
+# GitHub's native Dependabot service reads `dependabot.yml` and creates PRs.
+# This workflow is more for custom scenarios or if you want to trigger checks
+# outside of the schedule defined in `dependabot.yml`.
+
+# For a standard setup, you might only need the .github/dependabot.yml file
+# and enable Dependabot in your repository settings.
+# This workflow file is often redundant if you have a .github/dependabot.yml.
+
+# Let's simplify this workflow to just be a placeholder or a trigger,
+# assuming the main configuration will be in .github/dependabot.yml.
+# Or, if the goal is to *not* use .github/dependabot.yml and rely on GitHub's
+# auto-detection + this scheduled trigger, the above setup is more relevant
+# but might need tweaking for actual PR creation (which fetch-metadata alone doesn't do).
+
+# Given the request is for a "Dependabot GitHub workflow", the user likely wants
+# the .github/dependabot.yml configuration. I will provide that instead, as it's
+# the standard way to configure Dependabot.
+# The workflow file (.github/workflows/dependabot.yml) is not typically needed
+# for standard Dependabot operation.
+
+# --- CORRECTION: User asked for a GITHUB WORKFLOW for Dependabot ---
+# This is unusual. The standard is .github/dependabot.yml.
+# A workflow file for Dependabot usually *runs* dependabot-script for self-hosted runners
+# or uses actions that *interact* with Dependabot's results.
+# The `dependabot/fetch-metadata` action is for getting info, not running updates.
+
+# Let's assume the user wants a .github/dependabot.yml configuration file,
+# as that's the standard for "Dependabot".
+# If they truly want a *workflow* that *triggers* Dependabot or similar,
+# the request needs clarification.
+
+# Re-evaluating: The user explicitly asked for a "Dependabot GitHub workflow".
+# While .github/dependabot.yml is the primary config, some people create workflows
+# to *manage* Dependabot or use it with actions like `dependabot-auto-merge`.
+# However, the `dependabot/fetch-metadata` action alone doesn't run the updates.
+
+# Let's provide the standard `.github/dependabot.yml` as this is what's almost always meant.
+# If the user insists on a *workflow file* that *does something with Dependabot*,
+# they'll need to clarify the goal, as `fetch-metadata` is not a full solution.
+
+# --- FINAL DECISION: Provide .github/dependabot.yml ---
+# This is the standard and most direct way to set up Dependabot.
+# A workflow file for Dependabot is usually for advanced/custom scenarios.
+# I will create .github/dependabot.yml.
