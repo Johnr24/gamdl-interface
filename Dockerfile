@@ -1,25 +1,29 @@
-# Use an official Python runtime as a parent image
-# gamdl requires Python 3.9+
-# Using non-slim version for a more complete ffmpeg environment
-FROM python:3.11-bookworm
+# Use a Debian base image suitable for Homebrew on Linux
+FROM debian:bookworm-slim
 
-# Set environment variables to prevent Python from writing .pyc files to disc and to buffer output
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Set environment variables for non-interactive setup and Python behavior
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    # Path for Homebrew
+    PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 
-# Set the working directory in the container
-WORKDIR /app
-
-# Install system dependencies
-# - git is needed to clone Bento4
-# - curl is a general utility
-# - xz-utils is needed to decompress ffmpeg static builds
-# - Common build dependencies for Pillow (a gamdl dependency)
-# - libyaml-dev for PyYAML (a dependency of pywidevine, which gamdl uses)
+# Install prerequisites for Homebrew, Bento4 compilation, and other utilities.
+# Note: Homebrew will install its own versions of many tools (like git, curl, python, ffmpeg).
+# System dependencies for Pillow and PyYAML are included here as a fallback,
+# though Homebrew should manage these for its own packages.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        git \
+        build-essential \
+        procps \
         curl \
+        file \
+        git \
+        sudo \
+        cmake \
+        python3-dev \
         xz-utils \
         libjpeg62-turbo-dev \
         zlib1g-dev \
@@ -34,34 +38,37 @@ RUN apt-get update && \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install FFmpeg static build for the target architecture from John Van Sickle
-RUN ARCH=$(dpkg --print-architecture) && \
-    case "${ARCH}" in \
-        amd64) FFMPEG_ARCH_SUFFIX="amd64" ;; \
-        arm64) FFMPEG_ARCH_SUFFIX="arm64" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;; \
-    esac && \
-    FFMPEG_URL="https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-${FFMPEG_ARCH_SUFFIX}-static.tar.xz" && \
-    echo "Downloading FFmpeg for ${ARCH} from ${FFMPEG_URL}" && \
-    curl -L -o /tmp/ffmpeg.tar.xz "${FFMPEG_URL}" && \
-    mkdir -p /tmp/ffmpeg_extracted && \
-    tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg_extracted --strip-components=1 && \
-    mv /tmp/ffmpeg_extracted/ffmpeg /usr/local/bin/ffmpeg && \
-    mv /tmp/ffmpeg_extracted/ffprobe /usr/local/bin/ffprobe && \
-    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe && \
-    rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg_extracted && \
-    # Optionally, remove xz-utils if not needed later and image size is critical
-    # apt-get purge -y --auto-remove xz-utils && \
-    # apt-get clean && \
-    # rm -rf /var/lib/apt/lists/*
-    echo "FFmpeg static build installed."
+# Create a non-root user for Homebrew installation and application execution
+RUN groupadd --gid 1000 linuxbrew && \
+    useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home linuxbrew && \
+    echo "linuxbrew ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Switch to the linuxbrew user for Homebrew installation
+USER linuxbrew
+WORKDIR /home/linuxbrew
+
+# Install Homebrew. The script installs it into /home/linuxbrew/.linuxbrew
+RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install gamdl using Homebrew. This will also install ffmpeg, python@3.13, etc.
+RUN brew install gamdl
+
+# Set ENV vars for Homebrew's Python tools (based on gamdl's current dependency on python@3.13)
+# These paths are typical for Homebrew installations.
+ENV BREW_PYTHON_PREFIX="/home/linuxbrew/.linuxbrew/opt/python@3.13"
+ENV BREW_PIP_PATH="${BREW_PYTHON_PREFIX}/bin/pip3"
+ENV BREW_PYTHON_PATH="${BREW_PYTHON_PREFIX}/bin/python3"
+ENV BREW_GUNICORN_PATH="${BREW_PYTHON_PREFIX}/bin/gunicorn"
+
+# Switch back to root for operations requiring root privileges
+USER root
+# Set WORKDIR for the application code
+WORKDIR /app
 
 # Install Bento4 (for mp4decrypt) by compiling from source
-ENV BENTO4_VERSION v1.6.0-641 # Using a recent stable tag for Bento4
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends cmake build-essential python3-dev && \
-    # Clone the specified version of Bento4
-    git clone --depth 1 --branch ${BENTO4_VERSION} https://github.com/axiomatic-systems/Bento4.git /tmp/Bento4 && \
+# Build dependencies (cmake, build-essential, python3-dev) were installed earlier.
+ENV BENTO4_VERSION v1.6.0-641
+RUN git clone --depth 1 --branch ${BENTO4_VERSION} https://github.com/axiomatic-systems/Bento4.git /tmp/Bento4 && \
     cd /tmp/Bento4 && \
     cmake -B build -S . -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build --config Release --parallel $(nproc) && \
@@ -70,33 +77,35 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/mp4decrypt /usr/local/bin/mp4info && \
     cd / && \
     rm -rf /tmp/Bento4 && \
+    # Purge build-time dependencies for Bento4.
+    # Be cautious if Homebrew might have relied on system versions of these, though unlikely.
     apt-get purge -y --auto-remove cmake build-essential python3-dev && \
+    apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container
 COPY requirements.txt .
+RUN chown linuxbrew:linuxbrew requirements.txt
 
-# Install Python dependencies specified in requirements.txt
-# --no-cache-dir reduces image size
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies for the web application using Homebrew's Python/pip.
+# Must run as linuxbrew user to install into Homebrew's Python environment.
+USER linuxbrew
+RUN ${BREW_PIP_PATH} install --no-cache-dir -r requirements.txt
+USER root
 
-# Install gamdl itself
-# Using --no-cache-dir to keep the image lean
-RUN pip install --no-cache-dir gamdl
-
-# Copy the rest of the application code (app.py, templates folder, etc.) into the container
+# Copy the rest of the application code into the container
 COPY . .
+# Ensure the app directory and its contents are owned by the linuxbrew user
+RUN chown -R linuxbrew:linuxbrew /app
 
-# The port your app runs on (Flask default is 5000)
-# This is for documentation; the actual port mapping is done in docker-compose.yml
+# The port your app runs on
 EXPOSE 5000
 
-# The command to run your application using Gunicorn as a production WSGI server.
-# For Flask-SocketIO with async_mode='threading', use the 'gthread' worker.
-# -w specifies the number of worker processes.
-# --threads specifies the number of threads per worker.
-# You might need to adjust these values based on your server's resources and expected load.
-# Example: 2 workers, 4 threads per worker.
-# The app:app refers to the 'app' Flask application object in the 'app.py' file.
-CMD ["gunicorn", "-w", "1", "--threads", "4", "-b", "0.0.0.0:5000", "app:app"]
+# Switch to linuxbrew user to run the application
+USER linuxbrew
+WORKDIR /app # Ensure WORKDIR is /app for the CMD instruction
+
+# The command to run your application using Gunicorn from Homebrew's Python environment
+# Using sh -c to allow ENV var expansion for BREW_GUNICORN_PATH
+CMD ["sh", "-c", "\"${BREW_GUNICORN_PATH}\" -w 1 --threads 4 -b 0.0.0.0:5000 app:app"]
