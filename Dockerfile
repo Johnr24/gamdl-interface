@@ -1,115 +1,98 @@
-# Use a Debian base image suitable for Homebrew on Linux
-FROM debian:bookworm-slim
+ARG version=22.04
+# version is passed through by Docker.
+# shellcheck disable=SC2154
+FROM ubuntu:"${version}"
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Set environment variables for non-interactive setup and Python behavior
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    DEBIAN_FRONTEND=noninteractive
+# Deterministic UID (first user). Helps with docker build cache
+ENV USER_ID=1000
+# Delete the default ubuntu user & group UID=1000 GID=1000 in Ubuntu 23.04+
+# that conflicts with the linuxbrew user
+RUN touch /var/mail/ubuntu && chown ubuntu /var/mail/ubuntu && userdel -r ubuntu; true
 
-# Path for Homebrew - This sets the PATH to include Homebrew's directories
-ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
+# We don't want to manually pin versions, happy to use whatever
+# Ubuntu thinks is best.
+# hadolint ignore=DL3008
 
-# Install prerequisites for Homebrew, Bento4 compilation, and other utilities.
-# Note: Homebrew will install its own versions of many tools (like git, curl, python, ffmpeg).
-# System dependencies for Pillow and PyYAML are included here as a fallback,
-# though Homebrew should manage these for its own packages.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        build-essential \
-        procps \
-        curl \
-        file \
-        git \
-        sudo \
-        cmake \
-        python3-dev \
-        xz-utils \
-        libjpeg62-turbo-dev \
-        zlib1g-dev \
-        libtiff5-dev \
-        liblcms2-dev \
-        libwebp-dev \
-        libfreetype6-dev \
-        libharfbuzz-dev \
-        libfribidi-dev \
-        libxcb1-dev \
-        libyaml-dev \
-    && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# `gh` installation taken from https://github.com/cli/cli/blob/trunk/docs/install_linux.md#debian-ubuntu-linux-raspberry-pi-os-apt
+# /etc/lsb-release is checked inside the container and sets DISTRIB_RELEASE.
+# We need `[` instead of `[[` because the shell is `/bin/sh`.
+# shellcheck disable=SC1091,SC2154,SC2292
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends software-properties-common gnupg-agent \
+  && if [ "$(uname -m)" != aarch64 ]; then add-apt-repository -y ppa:git-core/ppa; fi \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  acl \
+  bzip2 \
+  ca-certificates \
+  curl \
+  file \
+  fonts-dejavu-core \
+  g++ \
+  gawk \
+  git \
+  gpg \
+  less \
+  locales \
+  make \
+  netbase \
+  openssh-client \
+  patch \
+  sudo \
+  unzip \
+  uuid-runtime \
+  tzdata \
+  jq \
+  && if [ "$(. /etc/lsb-release; echo "${DISTRIB_RELEASE}" | cut -d. -f1)" -ge 22 ]; then apt-get install -y --no-install-recommends skopeo; fi \
+  && mkdir -p /etc/apt/keyrings \
+  && chmod 0755 /etc /etc/apt /etc/apt/keyrings \
+  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null \
+  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list >/dev/null \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends gh \
+  && apt-get remove --purge -y software-properties-common \
+  && apt-get autoremove --purge -y \
+  && rm -rf /var/lib/apt/lists/* \
+  && sed -i -E 's/^(USERGROUPS_ENAB\s+)yes$/\1no/' /etc/login.defs \
+  && localedef -i en_US -f UTF-8 en_US.UTF-8 \
+  && useradd -u "${USER_ID}" --create-home --shell /bin/bash --user-group linuxbrew \
+  && echo 'linuxbrew ALL=(ALL) NOPASSWD:ALL' >>/etc/sudoers \
+  && su - linuxbrew -c 'mkdir ~/.linuxbrew'
 
-# Create a non-root user for Homebrew installation and application execution
-RUN groupadd --gid 1000 linuxbrew && \
-    useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home linuxbrew && \
-    echo "linuxbrew ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-
-# Switch to the linuxbrew user for Homebrew installation
 USER linuxbrew
+COPY --chown=linuxbrew:linuxbrew . /home/linuxbrew/.linuxbrew/Homebrew
+ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}" \
+  XDG_CACHE_HOME=/home/linuxbrew/.cache
 WORKDIR /home/linuxbrew
 
-# Install Homebrew. The script installs it into /home/linuxbrew/.linuxbrew
-RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Install gamdl using Homebrew. This will also install ffmpeg, python@3.13, etc.
-# Ensure Homebrew environment is sourced for this RUN command.
-RUN eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && \
-    brew install gamdl
+RUN --mount=type=cache,target=/tmp/homebrew-core,uid="${USER_ID}",sharing=locked \
+  # Clone the homebrew-core repo into /tmp/homebrew-core or pull latest changes if it exists
+  git clone https://github.com/homebrew/homebrew-core /tmp/homebrew-core || { cd /tmp/homebrew-core && git pull; } \
+  && mkdir -p /home/linuxbrew/.linuxbrew/Homebrew/Library/Taps/homebrew/homebrew-core \
+  && cp -r /tmp/homebrew-core /home/linuxbrew/.linuxbrew/Homebrew/Library/Taps/homebrew/
 
-# Set ENV vars for Homebrew's Python tools (based on gamdl's current dependency on python@3.13)
-# These paths are typical for Homebrew installations.
-ENV BREW_PYTHON_PREFIX="/home/linuxbrew/.linuxbrew/opt/python@3.13"
-ENV BREW_PIP_PATH="${BREW_PYTHON_PREFIX}/bin/pip3"
-ENV BREW_PYTHON_PATH="${BREW_PYTHON_PREFIX}/bin/python3"
-ENV BREW_GUNICORN_PATH="${BREW_PYTHON_PREFIX}/bin/gunicorn"
 
-# Switch back to root for operations requiring root privileges
-USER root
-# Set WORKDIR for the application code
-WORKDIR /app
-
-# Install Bento4 (for mp4decrypt) by compiling from source
-# Build dependencies (cmake, build-essential, python3-dev) were installed earlier.
-ENV BENTO4_VERSION v1.6.0-641
-RUN git clone --depth 1 --branch ${BENTO4_VERSION} https://github.com/axiomatic-systems/Bento4.git /tmp/Bento4 && \
-    cd /tmp/Bento4 && \
-    cmake -B build -S . -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build --config Release --parallel $(nproc) && \
-    cp build/mp4decrypt /usr/local/bin/ && \
-    cp build/mp4info /usr/local/bin/ && \
-    chmod +x /usr/local/bin/mp4decrypt /usr/local/bin/mp4info && \
-    cd / && \
-    rm -rf /tmp/Bento4 && \
-    # Purge build-time dependencies for Bento4.
-    # Be cautious if Homebrew might have relied on system versions of these, though unlikely.
-    apt-get purge -y --auto-remove cmake build-essential python3-dev && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy the requirements file into the container
-COPY requirements.txt .
-RUN chown linuxbrew:linuxbrew requirements.txt
-
-# Install Python dependencies for the web application using Homebrew's Python/pip.
-# Must run as linuxbrew user to install into Homebrew's Python environment.
-USER linuxbrew
-RUN eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && \
-    ${BREW_PIP_PATH} install --no-cache-dir -r requirements.txt
-USER root
-
-# Copy the rest of the application code into the container
-COPY . .
-# Ensure the app directory and its contents are owned by the linuxbrew user
-RUN chown -R linuxbrew:linuxbrew /app
-
-# The port your app runs on
-EXPOSE 5000
-
-# Switch to linuxbrew user to run the application
-USER linuxbrew
-WORKDIR /app # Ensure WORKDIR is /app for the CMD instruction
-
-# The command to run your application using Gunicorn from Homebrew's Python environment
-# Using sh -c to allow ENV var expansion for BREW_GUNICORN_PATH
-CMD ["sh", "-c", "\"${BREW_GUNICORN_PATH}\" -w 1 --threads 4 -b 0.0.0.0:5000 app:app"]
+RUN --mount=type=cache,target=/home/linuxbrew/.cache,uid="${USER_ID}" \
+  --mount=type=cache,target=/home/linuxbrew/.bundle,uid="${USER_ID}" \
+  mkdir -p \
+  .linuxbrew/bin \
+  .linuxbrew/etc \
+  .linuxbrew/include \
+  .linuxbrew/lib \
+  .linuxbrew/opt \
+  .linuxbrew/sbin \
+  .linuxbrew/share \
+  .linuxbrew/var/homebrew/linked \
+  .linuxbrew/Cellar \
+  && ln -s ../Homebrew/bin/brew .linuxbrew/bin/brew \
+  && git -C .linuxbrew/Homebrew remote set-url origin https://github.com/Homebrew/brew \
+  && git -C .linuxbrew/Homebrew fetch origin \
+  && HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_AUTO_UPDATE=1 brew tap --force homebrew/core \
+  && brew install-bundler-gems --groups=all \
+  && brew cleanup \
+  && { git -C .linuxbrew/Homebrew config --unset gc.auto; true; } \
+  && { git -C .linuxbrew/Homebrew config --unset homebrew.devcmdrun; true; } \
+  && touch .linuxbrew/.homebrewdocker

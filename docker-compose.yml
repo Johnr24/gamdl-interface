@@ -17,7 +17,7 @@ services:
       - ./config:/app/config
       # Mount a host directory for music downloads to /app/music in the container.
       # User should create './music' on the host.
-      - /mnt/SSDPool/Media/Music:/app/music
+      - ./Music:/app/music
       # For development, you might want to mount your application code:
       # - .:/app 
     restart: unless-stopped
