@@ -1,0 +1,11 @@
+.aider*
+.env
+.venv
+
+# Output directory for gamdl (matches host mount for Docker)
+/music/
+Apple Music/
+Apple Music/*
+/config
+config/
+config/*
