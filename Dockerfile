@@ -20,8 +20,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Bento4 (for mp4decrypt)
-# Using a specific version for reproducibility. v1.6.0-640 is a known stable release.
-ENV BENTO4_VERSION 1.6.0-640
+# Using a specific version for reproducibility. v1.6.0-639 has the required Linux SDK.
+ENV BENTO4_VERSION 1.6.0-639
 ENV BENTO4_SDK_FILENAME Bento4-SDK-${BENTO4_VERSION}.x86_64-unknown-linux-gnu.zip
 ENV BENTO4_SDK_DIRNAME Bento4-SDK-${BENTO4_VERSION}.x86_64-unknown-linux-gnu
 
