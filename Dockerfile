@@ -11,13 +11,28 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies
-# - ffmpeg is required by gamdl
 # - git is needed to clone Bento4
 # - curl is a general utility
+# - xz-utils is needed to decompress ffmpeg static builds
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg git curl && \
+    apt-get install -y --no-install-recommends git curl xz-utils && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Download and install FFmpeg static build for ARM64 from John Van Sickle
+RUN FFMPEG_URL="https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-arm64-static.tar.xz" && \
+    curl -L -o /tmp/ffmpeg.tar.xz "${FFMPEG_URL}" && \
+    mkdir -p /tmp/ffmpeg_extracted && \
+    tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg_extracted --strip-components=1 && \
+    mv /tmp/ffmpeg_extracted/ffmpeg /usr/local/bin/ffmpeg && \
+    mv /tmp/ffmpeg_extracted/ffprobe /usr/local/bin/ffprobe && \
+    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe && \
+    rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg_extracted && \
+    # Optionally, remove xz-utils if not needed later and image size is critical
+    # apt-get purge -y --auto-remove xz-utils && \
+    # apt-get clean && \
+    # rm -rf /var/lib/apt/lists/*
+    echo "FFmpeg static build installed."
 
 # Install Bento4 (for mp4decrypt) by compiling from source
 ENV BENTO4_VERSION v1.6.0-641 # Using a recent stable tag for Bento4
