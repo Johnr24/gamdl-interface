@@ -19,21 +19,6 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Bento4 (for mp4decrypt)
-# Using a specific version for reproducibility. v1.6.0-637 has the required Linux SDK.
-ENV BENTO4_VERSION 1.6.0-637
-ENV BENTO4_SDK_FILENAME Bento4-SDK-${BENTO4_VERSION}.x86_64-unknown-linux-gnu.zip
-ENV BENTO4_SDK_DIRNAME Bento4-SDK-${BENTO4_VERSION}.x86_64-unknown-linux-gnu
-
-RUN curl -fL -o ${BENTO4_SDK_FILENAME} \
-         https://github.com/axiomatic-systems/Bento4/releases/download/v${BENTO4_VERSION}/${BENTO4_SDK_FILENAME} && \
-    unzip ${BENTO4_SDK_FILENAME} && \
-    mv ${BENTO4_SDK_DIRNAME}/bin/mp4decrypt /usr/local/bin/ && \
-    mv ${BENTO4_SDK_DIRNAME}/bin/mp4info /usr/local/bin/ && \
-    # Add other Bento4 tools if needed, e.g., mp4dump, mp4encrypt
-    chmod +x /usr/local/bin/mp4decrypt /usr/local/bin/mp4info && \
-    rm -rf ${BENTO4_SDK_FILENAME} ${BENTO4_SDK_DIRNAME}
-
 # Copy the requirements file into the container
 COPY requirements.txt .
 
