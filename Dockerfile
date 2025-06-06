@@ -45,6 +45,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 ENV BENTO4_VERSION v1.6.0-641 # Using a recent stable tag for Bento4
 RUN apt-get update && \
     apt-get install -y --no-install-recommends cmake build-essential python3-dev && \
+    # Clone the specified version of Bento4
     git clone --depth 1 --branch ${BENTO4_VERSION} https://github.com/axiomatic-systems/Bento4.git /tmp/Bento4 && \
     cd /tmp/Bento4 && \
     cmake -B build -S . -DCMAKE_BUILD_TYPE=Release && \
