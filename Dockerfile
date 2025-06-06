@@ -19,8 +19,15 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install FFmpeg static build for ARM64 from John Van Sickle
-RUN FFMPEG_URL="https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-arm64-static.tar.xz" && \
+# Download and install FFmpeg static build for the target architecture from John Van Sickle
+RUN ARCH=$(dpkg --print-architecture) && \
+    case "${ARCH}" in \
+        amd64) FFMPEG_ARCH_SUFFIX="amd64" ;; \
+        arm64) FFMPEG_ARCH_SUFFIX="arm64" ;; \
+        *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;; \
+    esac && \
+    FFMPEG_URL="https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-${FFMPEG_ARCH_SUFFIX}-static.tar.xz" && \
+    echo "Downloading FFmpeg for ${ARCH} from ${FFMPEG_URL}" && \
     curl -L -o /tmp/ffmpeg.tar.xz "${FFMPEG_URL}" && \
     mkdir -p /tmp/ffmpeg_extracted && \
     tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg_extracted --strip-components=1 && \
