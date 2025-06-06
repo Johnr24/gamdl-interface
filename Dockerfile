@@ -15,7 +15,7 @@ WORKDIR /app
 # - unzip is needed to extract Bento4
 # - curl or wget is needed to download Bento4 (curl is often preferred)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg git unzip curl && \
+    apt-get install -y ffmpeg git unzip curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

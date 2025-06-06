@@ -113,6 +113,7 @@ def handle_start_download(data_dict):
         gamdl_command_args = [
             '--cookies-path', GAMDL_COOKIES_PATH,
             '--output-path', GAMDL_OUTPUT_PATH,
+            '--mp4decrypt-path', '/usr/local/bin/mp4decrypt', # Specify path to mp4decrypt
             apple_music_url
         ]
         
