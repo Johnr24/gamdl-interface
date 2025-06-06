@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
-    # Path for Homebrew
+    # Path for Homebrew - This sets the PATH to include Homebrew's directories
     PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 
 # Install prerequisites for Homebrew, Bento4 compilation, and other utilities.
