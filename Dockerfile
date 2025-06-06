@@ -1,6 +1,7 @@
 # Use an official Python runtime as a parent image
 # gamdl requires Python 3.9+
-FROM python:3.11-slim-bookworm
+# Using non-slim version for a more complete ffmpeg environment
+FROM python:3.11-bookworm
 
 # Set environment variables to prevent Python from writing .pyc files to disc and to buffer output
 ENV PYTHONDONTWRITEBYTECODE 1
