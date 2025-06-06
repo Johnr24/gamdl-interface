@@ -52,7 +52,9 @@ WORKDIR /home/linuxbrew
 RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # Install gamdl using Homebrew. This will also install ffmpeg, python@3.13, etc.
-RUN brew install gamdl
+# Ensure Homebrew environment is sourced for this RUN command.
+RUN eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && \
+    brew install gamdl
 
 # Set ENV vars for Homebrew's Python tools (based on gamdl's current dependency on python@3.13)
 # These paths are typical for Homebrew installations.
@@ -92,7 +94,8 @@ RUN chown linuxbrew:linuxbrew requirements.txt
 # Install Python dependencies for the web application using Homebrew's Python/pip.
 # Must run as linuxbrew user to install into Homebrew's Python environment.
 USER linuxbrew
-RUN ${BREW_PIP_PATH} install --no-cache-dir -r requirements.txt
+RUN eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && \
+    ${BREW_PIP_PATH} install --no-cache-dir -r requirements.txt
 USER root
 
 # Copy the rest of the application code into the container
